@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>three.js webgl - morphtargets - MD2 controls</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<style>
+			body {
+				color: #000;
+				font-family:Monospace;
+				font-size:13px;
+				text-align:center;
+				font-weight: bold;
+
+				background-color: #fff;
+				margin: 0px;
+				overflow: hidden;
+			}
+
+			#info {
+				position: absolute;
+				padding: 10px;
+				width: 100%;
+				text-align: center;
+				color: #000;
+			}
+
+			a { color: skyblue; }
+		</style>
+	</head>
+
+	<body>
+		<div id="info">
+		</div>
+
+		<script src="../build/three.js"></script>
+		<script src="js/controls/OrbitControls.js"></script>
+    <script src="js/loaders/OBJLoader.js"></script>
+		<script src='js/Detector.js'></script>
+		<script src='js/libs/stats.min.js'></script>
+
+		<script>
+
+			if ( ! Detector.webgl ) Detector.addGetWebGLMessage();
+
+			var SCREEN_WIDTH = window.innerWidth;
+			var SCREEN_HEIGHT = window.innerHeight;
+
+			var container, stats, camera, scene, raycaster, renderer;
+
+			var mouse = new THREE.Vector2(), INTERSECTED;
+			var turbines = [];
+			var turbineArray = [10, 8];
+
+			var current = Date.now();
+			var duration = 3750;
+
+			var cameraControls;
+
+			var clock = new THREE.Clock();
+
+			init();
+			animate();
+
+			function init() {
+
+				container = document.createElement( 'div' );
+				document.body.appendChild( container );
+
+				// CAMERA
+
+				camera = new THREE.PerspectiveCamera( 80, window.innerWidth / window.innerHeight, 1, 100000 );
+				camera.position.set( 0, 300, 1300 );
+
+				// SCENE
+
+				scene = new THREE.Scene();
+				// scene.fog = new THREE.Fog( 0xffffff, 10000, 100000 );
+
+				scene.add( camera );
+
+				// LIGHTS
+
+				scene.add( new THREE.AmbientLight( 0x444444 ) );
+
+				var light = new THREE.DirectionalLight( 0x666666, 2.25 );
+				// light.position.set( 200, 450, 500 );
+				// light.position.set( 400, 900, 1000 );
+				light.position.set( 800, 1800, 2000 );
+
+				light.castShadow = true;
+
+				light.shadow.mapSize.width = 2048;
+				light.shadow.mapSize.height = 2048;
+
+				light.shadow.camera.near = 100;
+				light.shadow.camera.far = 12000;
+
+				light.shadow.camera.left = -2000;
+				light.shadow.camera.right = 2000;
+				// light.shadow.camera.top = 1400;
+				// light.shadow.camera.bottom = -1400;
+				light.shadow.camera.top = 2000;
+				light.shadow.camera.bottom = -2000;
+
+				scene.add( light );
+				// scene.add( new THREE.CameraHelper( light.shadow.camera ) );
+
+				// GROUND
+
+				// var gt = new THREE.TextureLoader().load( "textures/terrain/dark-green-grass.jpg" );
+				// var gg = new THREE.PlaneBufferGeometry( 12000, 12000 );
+				// var gm = new THREE.MeshLambertMaterial( { color: 0xffffff, map: gt } );
+				//
+				// var ground = new THREE.Mesh( gg, gm );
+				// ground.rotation.x = - Math.PI / 2;
+				// ground.material.map.repeat.set( 64, 64 );
+				// ground.material.map.wrapS = THREE.RepeatWrapping;
+				// ground.material.map.wrapT = THREE.RepeatWrapping;
+				// // note that because the ground does not cast a shadow, .castShadow is left false
+				// ground.receiveShadow = true;
+				//
+				// scene.add( ground );
+
+				// PLANE
+
+				var planeGeometry = new THREE.PlaneGeometry( 10000, 10000 );
+				planeGeometry.rotateX( - Math.PI / 2 );
+				for ( var i = 0; i < planeGeometry.faces.length; i ++ ) {
+			    var face = planeGeometry.faces[ i ];
+			    face.color.setHex( 0x656D78 );
+				}
+
+				// no color
+				// var planeMaterial = new THREE.ShadowMaterial();
+				// planeMaterial.opacity = 0.2;
+
+				var planeMaterial = new THREE.MeshLambertMaterial();
+				planeMaterial.vertexColors = THREE.FaceColors;
+				planeMaterial.transparent = true;
+				planeMaterial.opacity = 0.1;
+
+				var plane = new THREE.Mesh( planeGeometry, planeMaterial );
+				plane.receiveShadow = true;
+				scene.add( plane );
+
+				var helper = new THREE.GridHelper( 5000, 100, 0x444444, 0x323133 );
+				helper.material.opacity = 0.5;
+				helper.material.transparent = true;
+				scene.add( helper );
+
+				// var axis = new THREE.AxisHelper();
+				// axis.position.set( -500, -500, -500 );
+				// scene.add( axis );
+
+        var manager = new THREE.LoadingManager();
+        manager.onProgress = function ( item, loaded, total ) {
+          console.log( item, loaded, total );
+        };
+
+        var onProgress = function ( xhr ) {
+          if ( xhr.lengthComputable ) {
+            var percentComplete = xhr.loaded / xhr.total * 100;
+            console.log( Math.round(percentComplete, 2) + '% downloaded' );
+          }
+        };
+
+        var onError = function ( xhr ) {
+          console.log('obj load error!!!');
+        };
+
+        // OBJLoader
+        var objLoader = new THREE.OBJLoader( manager );
+        objLoader.load( 'obj/fengji_4.obj', function ( object ) {
+					var redMaterial, yelMaterial;
+
+					var turbine = new THREE.Object3D();
+					turbine.rotation.y = Math.PI / 2;
+					turbine.name = 'turbine_0'
+
+					var pivot = new THREE.Object3D();
+					pivot.position.y = 200;
+					pivot.name = 'rotor';
+					turbine.add(pivot)
+
+					// not render the first turbine
+          // scene.add( turbine );
+
+          object.traverse( function ( child ) {
+            if ( child instanceof THREE.Mesh &&
+						 	child.name !== 'zhuan' ) {
+              // child.material.map = texture;
+							var mesh = child.clone()
+							mesh.castShadow = true;
+							mesh.receiveShadow = false;
+							turbine.add(mesh)
+            }
+						if (child.name === 'zhuan') {
+							if (!redMaterial || !yelMaterial) {
+								redMaterial = child.material.clone();
+								redMaterial.color.setHex( 0xff0000 );
+
+								yelMaterial = child.material.clone();
+								yelMaterial.color.setHex( 0xffff00 );
+							}
+
+							var mesh = child.clone()
+							mesh.position.y = -200;
+							mesh.castShadow = true;
+							mesh.receiveShadow = false;
+							pivot.add(mesh);
+						}
+          });
+
+					var clonedTurbine;
+
+					var colInt8 = new Int8Array(new ArrayBuffer(turbineArray[0]));
+					var rowInt8 = new Int8Array(new ArrayBuffer(turbineArray[1]));
+
+					var rowDeltat = 0;
+					for (var row = 0; row < rowInt8.length; row++) {
+						var z;
+
+						if (row % 2 === 0) {
+							z = -rowDeltat;
+						} else {
+							rowDeltat += 200;
+							z = rowDeltat;
+						}
+
+						var colDeltat = 0;
+						for (var col = 0; col < colInt8.length; col++) {
+							var x;
+
+							if (col % 2 === 0) {
+								x = -colDeltat;
+							} else {
+								colDeltat += 200;
+								x = colDeltat;
+							}
+
+							clonedTurbine = turbine.clone();
+							clonedTurbine.position.x = x;
+							clonedTurbine.position.z = z;
+							clonedTurbine.name = 'turbine_' + col + '_' + row;
+							scene.add( clonedTurbine );
+
+							clonedTurbine.children[0].rotation.x += Math.random() * 10 * Math.PI / 10;
+							var rotor = clonedTurbine.children[0].children[0];
+							var status = Math.random();
+							if (status > 0.96) {
+								rotor.material = redMaterial;
+							} else if (Math.random() > 0.92) {
+								rotor.material = yelMaterial;
+							}
+
+							clonedTurbine.currentTime = Date.now();
+							turbines.push( clonedTurbine );
+						}
+					}
+
+
+        }, onProgress, onError );
+
+				raycaster = new THREE.Raycaster();
+
+				// RENDERER
+
+				renderer = new THREE.WebGLRenderer( { antialias: true } );
+				// renderer.setClearColor( scene.fog.color );
+				renderer.setClearColor( 0x222222 );
+				renderer.setPixelRatio( window.devicePixelRatio );
+				renderer.setSize( SCREEN_WIDTH, SCREEN_HEIGHT );
+				container.appendChild( renderer.domElement );
+
+				renderer.gammaInput = true;
+				renderer.gammaOutput = true;
+
+				renderer.shadowMap.enabled = true;
+				renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+				// STATS
+
+				stats = new Stats();
+				container.appendChild( stats.dom );
+
+				// EVENTS
+
+				window.addEventListener( 'resize', onWindowResize, false );
+				document.addEventListener( 'mousedown', onDocumentMouseDown, false);
+
+				// CONTROLS
+
+				cameraControls = new THREE.OrbitControls( camera, renderer.domElement );
+				cameraControls.target.set( 0, 50, 0 );
+			}
+
+			// EVENT HANDLERS
+
+			function onWindowResize( event ) {
+
+				SCREEN_WIDTH = window.innerWidth;
+				SCREEN_HEIGHT = window.innerHeight;
+
+				renderer.setSize( SCREEN_WIDTH, SCREEN_HEIGHT );
+
+				camera.aspect = SCREEN_WIDTH/ SCREEN_HEIGHT;
+				camera.updateProjectionMatrix();
+
+			}
+
+      function onDocumentMouseDown( event ) {
+        // the following line would stop any other event handler from firing
+        // (such as the mouse's TrackballControls)
+		    // event.preventDefault();
+
+	      // update the mouse variable
+	      mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1;
+		    mouse.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
+
+				raycaster.setFromCamera( mouse, camera );
+
+				var intersects = raycaster.intersectObjects( turbines, true );
+
+				if (intersects.length > 0) {
+					for (var j = 0; j < turbines.length; j++) {
+						if (intersects[0].object.parent === turbines[j]) {
+							console.log('select', turbines[j].name)
+						}
+					}
+				}
+			}
+
+			function animate() {
+
+				requestAnimationFrame( animate );
+
+				var now = Date.now();
+
+				if (turbines.length > 0) {
+					for (var j = 0; j < turbines.length; j++) {
+						var ms = turbines[j].children;
+						for (var i = 0; i < ms.length; i++) {
+							var m = ms[i];
+							if (m.name === 'rotor') {
+								var deltat = now - turbines[j].currentTime;
+								turbines[j].currentTime = now;
+								var fract = deltat / duration;
+								var angle = Math.PI * 2 * fract;
+								m.rotation.x += angle;
+							}
+						}
+					}
+				}
+
+				render();
+				stats.update();
+
+			}
+
+			function render() {
+
+				var delta = clock.getDelta();
+
+				cameraControls.update( delta );
+
+				renderer.render( scene, camera );
+
+			}
+
+		</script>
+
+	</body>
+</html>
